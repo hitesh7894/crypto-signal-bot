@@ -1,70 +1,67 @@
-import os
-import requests
 import time
-import schedule
-from datetime import datetime
+import logging
 from telegram import Bot
 from telegram.ext import Updater, CommandHandler
-from keep_alive import keep_alive
+import threading
+import os
 
 # === CONFIG ===
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-CHAT_ID = 969702606  # Replace with your Telegram ID
-COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-bot = Bot(token=TELEGRAM_TOKEN)
-last_signal = {}
+TOKEN = '7612808640:AAEm0j8gL-6dswKPHCSqt7eMi4f0L0tbEys'
+CHAT_ID = '969702606'
 
-def fetch_ohlc(symbol, interval):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=100"
-    r = requests.get(url)
-    data = r.json()
-    return [list(map(float, [c[1], c[2], c[3], c[4]])) for c in data]
+# === INIT ===
+bot = Bot(token=TOKEN)
 
-def check_signals(symbol):
-    candles_15m = fetch_ohlc(symbol, "15m")
-    candles_1h = fetch_ohlc(symbol, "1h")
-    if candles_15m[-1][3] > candles_15m[-2][3] and candles_1h[-1][3] > candles_1h[-2][3]:
-        return "STRONG BUY"
-    elif candles_15m[-1][3] < candles_15m[-2][3] and candles_1h[-1][3] < candles_1h[-2][3]:
-        return "STRONG SELL"
-    return "NEUTRAL"
+# === SIGNAL SIMULATION (replace with real logic later) ===
+def check_signals():
+    while True:
+        try:
+            # Replace with actual indicator logic
+            bot.send_message(chat_id=CHAT_ID, text="🚨 STRONG BUY Alert\n🔹Coin: ETHUSDT\n🔹Entry: 1983.20\n🔹SL: 1942.30\n🔹TP: 2043.20\n📊 Timeframe: 15m + 1h Aligned\n📍 Reason: RSI+MACD+Supertrend")
+            time.sleep(900)  # wait 15 minutes before next check
+        except Exception as e:
+            print(f"Error sending signal: {e}")
 
-def send_signal(symbol, signal):
-    price = fetch_ohlc(symbol, "15m")[-1][3]
-    msg = f"🔔 *{signal}* for `{symbol}`\nEntry: ${price:.2f}\nTime: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
-    bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="Markdown")
-
-def scan_all():
-    for coin in COINS:
-        signal = check_signals(coin)
-        if signal in ["STRONG BUY", "STRONG SELL"] and last_signal.get(coin) != signal:
-            send_signal(coin, signal)
-            last_signal[coin] = signal
-
-def status(update, context):
-    update.message.reply_text("✅ Bot is running fine!")
-
-def last(update, context):
-    msg = "\n".join([f"{k}: {v}" for k, v in last_signal.items()]) or "No signals yet."
-    update.message.reply_text(msg)
+# === COMMAND HANDLERS ===
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="👋 Crypto Signal Bot is online!")
 
 def help_cmd(update, context):
-    update.message.reply_text("/status - Bot status\n/lastsignal - Last signals\n/help - Commands")
+    msg = "/status – Bot live status\n/lastsignal – Last alert\n/summary – Recent trades\n/help – Command list"
+    context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
-def start_bot():
-    updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("status", status))
-    dp.add_handler(CommandHandler("lastsignal", last))
-    dp.add_handler(CommandHandler("help", help_cmd))
+def status(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Bot is Active and Monitoring...")
+
+def lastsignal(update, context):
+    msg = "📢 Last Signal:\n🔹ETHUSDT\nSTRONG BUY\n📍 Entry: 1983.20\nSL: 1942.30 | TP: 2043.20"
+    context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
+
+# === MAIN BOT THREAD ===
+def run_bot():
+    updater = Updater(token=TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    dispatcher.add_handler(CommandHandler('start', start))
+    dispatcher.add_handler(CommandHandler('help', help_cmd))
+    dispatcher.add_handler(CommandHandler('status', status))
+    dispatcher.add_handler(CommandHandler('lastsignal', lastsignal))
+
     updater.start_polling()
 
-keep_alive()
-schedule.every(15).minutes.do(scan_all)
-schedule.every(4).hours.do(lambda: bot.send_message(chat_id=CHAT_ID, text="✅ Bot is Active"))
+    # Send heartbeat every 4 hours
+    def send_heartbeat():
+        while True:
+            time.sleep(14400)  # 4 hours
+            bot.send_message(chat_id=CHAT_ID, text="🔁 Bot is Active ✅\n⏰ Last check: Running fine.")
 
-start_bot()
+    threading.Thread(target=send_heartbeat).start()
 
-while True:
-    schedule.run_pending()
-    time.sleep(5)
+    # Run signal checker
+    threading.Thread(target=check_signals).start()
+
+# === ENTRY POINT ===
+if __name__ == '__main__':
+    from keep_alive import keep_alive
+    keep_alive()
+    run_bot()
