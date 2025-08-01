@@ -1,0 +1,6 @@
+cat > requirements.txt << 'EOF'
+python-telegram-bot==13.7
+requests
+schedule
+flask
+EOF
